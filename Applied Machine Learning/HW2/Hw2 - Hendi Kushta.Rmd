@@ -1,0 +1,192 @@
+```{r}
+library(readr)
+supermarket_sales <- read_csv("Desktop/Applied Machine Learning/Week2/HW2/supermarket_sales(1).csv")
+
+supermarket_sales_new <- supermarket_sales[c("Branch", "Customer type", "Gender", "Product line", "Quantity",
+                    "Time","Payment", "gross income", "Rating")]
+```
+
+```{r}
+View(supermarket_sales_new) # view the dataset in a tabular form
+```
+
+
+```{r}
+str(supermarket_sales_new) # look at the structure of this object
+summary(supermarket_sales_new)
+```
+
+
+```{r}
+sum(is.na(supermarket_sales_new)) # check if there are any null values
+sum(duplicated(supermarket_sales_new)) # check if there are any duplicated values
+```
+
+```{r}
+# create a vector with the attributes that are needed to be converted as factors
+char_vars <- c("Branch", "Customer type", "Gender", "Product line", "Payment")
+# convert char to factors
+supermarket_sales_new[char_vars] <- lapply(supermarket_sales_new[char_vars], as.factor)
+str(supermarket_sales_new)
+```
+
+```{r}
+table(supermarket_sales_new$`Customer type`) # calculates the number for each customer type category
+table(supermarket_sales_new$Gender) # calculates the number for each gender category
+table(supermarket_sales_new$`Product line`) # calculates the number of each product line category
+table(supermarket_sales_new$Payment) # calculates the number for each payment category
+```
+
+```{r}
+#visualize graphically the distribution of Factor data
+library(ggplot2)
+
+# plot for branches
+count_branch <- supermarket_sales_new %>% count(Branch)
+ggplot(count_branch, aes(x = Branch, y=n, fill=Branch)) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(label = n), vjust = -0.5, size = 3, position = position_dodge(0.9))+
+  ylab("Number of branches")
+  
+# plot for gender distribution
+ggplot(supermarket_sales_new, aes(Gender,fill=Gender)) + geom_bar()
+
+count_gender <- supermarket_sales_new %>% count(Gender)
+ggplot(count_gender, aes(x = Gender, y=n, fill=Gender)) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(label = n), vjust = -0.5, size = 3, position = position_dodge(0.9))+
+  ylab("Number of males and females")
+
+
+# plot for product line
+
+count_productLine <- supermarket_sales_new %>% count(`Product line`)
+ggplot(count_productLine, aes(x = `Product line`, y=n, fill=`Product line`)) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(label = n), vjust = -0.5, size = 3, position = position_dodge(0.9))+
+  ylab("Number of males and females")
+
+
+# plot for payment type
+
+count_paymentType <- supermarket_sales_new %>% count(Payment)
+ggplot(count_paymentType, aes(x = Payment, y=n, fill=Payment)) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(label = n), vjust = -0.5, size = 3, position = position_dodge(0.9))+
+  ylab("Number of payment types")
+
+# plot for customer type
+
+count_customerType <- supermarket_sales_new %>% count(`Customer type`)
+ggplot(count_customerType, aes(x = `Customer type`, y=n, fill=`Customer type`)) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(label = n), vjust = -0.5, size = 3, position = position_dodge(0.9))+
+  ylab("Number of customers")
+
+```
+
+```{r}
+# visualization for numerical variables
+summary(supermarket_sales_new$Quantity)
+hist(supermarket_sales_new$Quantity, xlab = "Quantity", ylab = "Frequency",
+     main = "Quantity Histogram")
+boxplot(supermarket_sales_new$Quantity, main = "Quantity Boxplot")
+
+summary(supermarket_sales_new$`gross income`)
+hist(supermarket_sales_new$`gross income`, xlab = "Gross income", ylab = "Frequency",
+     main = "Gross income Histogram")
+boxplot(supermarket_sales_new$`gross income`, main = "Gross income Boxplot")
+
+summary(supermarket_sales_new$Rating)
+hist(supermarket_sales_new$Rating, xlab = "Gross income", ylab = "Frequency",
+     main = "Gross income Histogram")
+boxplot(supermarket_sales_new$Rating, main = "Gross income Boxplot")
+```
+
+```{r}
+# 1- what’s the gross income distribution over different branches?
+
+library(dplyr)
+gross_income_branch <- supermarket_sales_new %>%
+  group_by(Branch) %>%
+  summarise(GrossIncome = format(sum(`gross income`),nsmall=2))
+
+gross_income_branch <- data.frame(gross_income_branch)
+gross_income_branch$Branch <- factor(gross_income_branch$Branch)
+gross_income_branch$GrossIncome <- as.numeric(gross_income_branch$GrossIncome)
+gross_income_branch
+
+library(ggplot2)
+ggplot(gross_income_branch, aes(x=Branch, y=GrossIncome)) + 
+  geom_bar(stat="identity", fill="blue") +
+  geom_text(aes(label = GrossIncome), 
+            position = position_dodge(width = 0.9), vjust = -0.25) +
+  scale_y_continuous(limits = c(0.00, 6000.00), expand = c(0,0)) +
+  xlab("Branch") + ylab("Gross Income") +
+  ggtitle("Gross Income per Branch")
+
+```
+
+```{r}
+#2- Are there gender differences in each branch?
+
+table(supermarket_sales_new$Branch,supermarket_sales_new$Gender)
+
+ggplot(supermarket_sales_new, aes(`Gender`, fill=`Gender`)) + 
+  geom_bar() +
+  geom_text(aes(label = ..count..), stat = "count", vjust = -0.5, size = 3, position = position_dodge(0.9)) +
+  facet_wrap(~Branch) +
+  ylab("Number of employees")
+```
+
+```{r}
+#3- What are the most preferred payment types in each of the branches?
+
+table(supermarket_sales_new$Branch,supermarket_sales_new$Payment)
+ggplot(supermarket_sales_new, aes(`Payment`, fill=`Payment`)) + 
+  geom_bar() +
+  geom_text(aes(label = ..count..), stat = "count", vjust = -0.5, size = 3, position = position_dodge(0.9)) +
+  facet_wrap(~Branch) +
+  ylab("Number of payment types")
+```
+
+```{r}
+#4- In which of the branches the customer are more sattisfied? 
+
+table(supermarket_sales_new$Branch,supermarket_sales_new$Rating)
+
+supermarket_sales_new %>%
+  group_by(Branch) %>%
+  summarize(average_rating = mean(Rating)) %>%
+  ggplot(aes(x = Branch, y = average_rating, fill=Branch)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = sprintf("%.2f", average_rating), y = average_rating),
+            position = position_dodge(width = 0.9), vjust = -0.25) +
+  xlab("Branch") +
+  ylab("Average Rating")
+```
+
+  
+```{r}
+#5- Sales distribution in each branch in each hour
+
+library(hms)
+
+supermarket_sales_new$Time <- as.numeric(as_hms(supermarket_sales_new$Time))
+supermarket_sales_new$Time <- supermarket_sales_new$Time/3200 # convert to hours
+supermarket_sales_new$Time <- floor(supermarket_sales_new$Time) # keep only hours
+# create a new data frame only with branches and times.
+
+ggplot(supermarket_sales_new, aes(Time, fill=Branch)) + 
+  geom_bar() +
+  geom_text(aes(label = ..count..), stat = "count", vjust = 1, size = 3, position = position_dodge(0.9)) +
+  facet_wrap(~Branch, ncol = 1) +
+  ylab("Number of orders in each hour") +
+  scale_x_discrete(limits = unique(supermarket_sales_new$Time))
+```
+
+
+
+
+
+

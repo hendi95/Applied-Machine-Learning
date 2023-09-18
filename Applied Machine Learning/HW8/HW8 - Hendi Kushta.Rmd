@@ -1,0 +1,297 @@
+
+```{r}
+library(tidyverse) # for data manipulation
+library(tidytext) # for tokenization
+library(textstem) # for word stemming and lemmatization
+library(caret) # for classification
+```
+
+```{r}
+# set the working directory to where the file is located
+setwd("/home/hendi/Desktop/Applied Machine Learning/HW8")
+
+# read the text file into a data frame
+data <- read.table("deception-data-converted.txt", header = TRUE, sep = "\t")
+
+# check the data
+View(data)
+
+```
+
+
+```{r}
+# Create a new column 'Index' containing row numbers and select all columns
+
+library(dplyr)
+your_data <- data %>%
+  mutate(Index = row_number()) %>%
+  select(Index, everything())
+View(your_data)
+```
+
+```{r}
+head(your_data)
+```
+
+### "Tokenize" the `review` column.
+```{r}
+# Tokenize the 'review' column into separate words and store in a new column 'word'
+
+library(tidytext)
+your_data_tidy <- your_data %>%
+  unnest_tokens(word, review)
+head(your_data_tidy)
+```
+
+### Remove stop words
+```{r}
+# Remove stop words from the 'word' column
+
+stop_words <- tidytext::stop_words
+your_data_tidy <- your_data_tidy %>%
+  anti_join(stop_words, by = "word")
+head(your_data_tidy)
+```
+
+### Word stemming and lemmatization
+```{r}
+library(SnowballC)
+library(textstem)
+# Stem and lemmatize the 'word' column, and store the results in new columns 'word_stemmed' and 'word_lemmatized'
+
+your_data_tidy <- your_data_tidy %>%
+  mutate(word_stemmed = wordStem(word)) %>%
+  mutate(word_lemmatized = lemmatize_words(word))
+
+head(your_data_tidy)
+```
+
+### Word frequencies, convert to wide format for classification task
+```{r}
+# Create a wide format data frame with the 'Index' column and counts of each lemmatized word
+
+your_data_wide <- your_data_tidy %>%
+  count(Index, word_lemmatized) %>%
+  spread(word_lemmatized, n, fill = 0, drop = FALSE)
+
+your_data_wide[1:5, 1:5]
+
+```
+
+```{r}
+# Create a wide format data frame with the 'Index' column and counts of each word
+# Join with the 'sentiment' column and move it next to the 'Index' column
+
+your_data_wide_sentiment <- your_data_tidy %>%
+  count(Index, word) %>%
+  spread(word, n, fill = 0, drop = FALSE) %>%
+  left_join(your_data %>% select(Index, sentiment)) %>%
+  relocate(sentiment, .after = Index)
+your_data_wide_sentiment$sentiment <- as.factor(your_data_wide_sentiment$sentiment)
+#str(your_data_wide_sentiment)
+
+your_data_wide_lie <- your_data_tidy %>%
+  count(Index, word) %>%
+  spread(word, n, fill = 0, drop = FALSE) %>%
+  left_join(your_data %>% select(Index, lie)) %>%
+  relocate(lie, .after = Index)
+your_data_wide_lie$lie <- as.factor(your_data_wide_lie$lie)
+#str(your_data_wide_lie)
+```
+
+### remove index column from  your_data_wide_sentiment and your_data_wide_lie
+```{r}
+# remove the column "Index"
+your_data_wide_sentiment <- subset(your_data_wide_sentiment, select = -Index)
+your_data_wide_lie <- subset(your_data_wide_lie, select = -Index)
+```
+
+
+### Build a SVM model. Tune parameters and report test performance.
+```{r}
+# Split the datasets into training and testing datasets:
+
+set.seed(123)
+train_index <- sample(nrow(your_data_wide_sentiment), nrow(your_data_wide_sentiment) * 0.7)
+train_data_sentiment <- your_data_wide_sentiment[train_index, ]
+test_data_sentiment <- your_data_wide_sentiment[-train_index, ]
+
+set.seed(123)
+train_index <- sample(nrow(your_data_wide_lie), nrow(your_data_wide_lie) * 0.7)
+train_data_lie <- your_data_wide_lie[train_index, ]
+test_data_lie <- your_data_wide_lie[-train_index, ]
+
+```
+
+```{r}
+# Specify the search grid for tuning the parameters of the SVM model:
+
+search_grid <- expand.grid(degree = c(1, 2, 3),
+                           scale = c(0.001, 0.01, 0.1, 1.0),
+                           C = seq(0.1, 2, length = 10))
+```
+
+```{r}
+# train_control <- trainControl(method = 'cv', number = 5)
+
+train_control <- trainControl(method = 'cv', number = 5)
+
+```
+
+
+```{r}
+#Train the SVM models:
+
+library(caret)
+svm_model_sentiment <- train(sentiment ~ .,
+                             data = train_data_sentiment,
+                             method = 'svmPoly',
+                             trControl = train_control,
+                             tuneGrid = search_grid)
+
+svm_model_lie <- train(lie ~ .,
+                       data = train_data_lie,
+                       method = 'svmPoly',
+                       trControl = train_control,
+                       tuneGrid = search_grid)
+
+```
+
+```{r}
+#Evaluate the models on the test data:
+
+predictions_sentiment <- predict(svm_model_sentiment, newdata = test_data_sentiment)
+confusion_matrix_sentiment <- confusionMatrix(predictions_sentiment, test_data_sentiment$sentiment)
+accuracy_sentiment <- confusion_matrix_sentiment$overall['Accuracy']
+
+predictions_lie <- predict(svm_model_lie, newdata = test_data_lie)
+confusion_matrix_lie <- confusionMatrix(predictions_lie, test_data_lie$lie)
+accuracy_lie <- confusion_matrix_lie$overall['Accuracy']
+
+```
+
+```{r}
+svm_model_sentiment
+confusion_matrix_sentiment
+cat("Test accuracy (sentiment):", accuracy_sentiment, "\n")
+
+svm_model_lie
+confusion_matrix_lie
+cat("Test accuracy (lie):", accuracy_lie, "\n")
+
+```
+
+```{r}
+# Sentiment model recall
+recall_sentiment <- confusion_matrix_sentiment$byClass['Recall']
+cat("Test recall (sentiment):", recall_sentiment, "\n")
+
+# Lie model recall
+recall_lie <- confusion_matrix_lie$byClass['Recall']
+cat("Test recall (lie):", recall_lie, "\n")
+
+```
+```{r}
+# Calculate precision for sentiment model
+precision_sentiment <- confusion_matrix_sentiment$byClass['Precision']
+cat("Test precision (sentiment):", precision_sentiment, "\n")
+
+# Calculate precision for lie model
+precision_lie <- confusion_matrix_lie$byClass['Precision']
+cat("Test precision (lie):", precision_lie, "\n")
+
+```
+
+### Build a Naive Bayes model. Tune parameters and report test performance.
+
+```{r}
+# Load required libraries
+library(caret)
+library(e1071)
+
+# Split the data into training and testing sets
+set.seed(123)
+trainIndex <- createDataPartition(your_data_wide_sentiment$sentiment, p = 0.7, list = FALSE)
+train_sentiment <- your_data_wide_sentiment[trainIndex, ]
+test_sentiment <- your_data_wide_sentiment[-trainIndex, ]
+
+set.seed(123)
+trainIndex <- createDataPartition(your_data_wide_lie$lie, p = 0.7, list = FALSE)
+train_lie <- your_data_wide_lie[trainIndex, ]
+test_lie <- your_data_wide_lie[-trainIndex, ]
+
+# Train the Naive Bayes model on the training set
+nb_sentiment <- naiveBayes(train_sentiment[, -1], train_sentiment[, 1])
+nb_lie <- naiveBayes(train_lie[, -1], train_lie[, 1])
+
+# Tune the model hyperparameters using cross-validation
+ctrl <- trainControl(method = "cv", number = 10)
+tune_grid <- expand.grid(laplace = c(0, 0.5, 1),
+                         usekernel = c(FALSE, TRUE),
+                         adjust = c(FALSE, TRUE))
+
+set.seed(123)
+nb_sentiment_tuned <- train(x = as.matrix(train_sentiment[, -1]), y = train_sentiment[, 1],
+                            method = "naive_bayes", tuneGrid = tune_grid, trControl = ctrl)
+
+set.seed(123)
+nb_lie_tuned <- train(x = as.matrix(train_lie[, -1]), y = train_lie[, 1],
+                            method = "naive_bayes", tuneGrid = tune_grid, trControl = ctrl)
+
+# Evaluate the model performance on the testing set
+sentiment_pred <- predict(nb_sentiment_tuned, newdata = test_sentiment[, -1])
+sentiment_cm <- confusionMatrix(sentiment_pred, test_sentiment[, 1])
+
+lie_pred <- predict(nb_lie_tuned, newdata = test_lie[, -1])
+lie_cm <- confusionMatrix(lie_pred, test_lie[, 1])
+
+
+sentiment_acc <- sentiment_cm$overall['Accuracy']
+sentiment_prec <- sentiment_cm$byClass['Pos Pred Value']
+sentiment_rec <- sentiment_cm$byClass['Sensitivity']
+
+lie_acc <- lie_cm$overall['Accuracy']
+lie_prec <- lie_cm$byClass['Pos Pred Value']
+lie_rec <- lie_cm$byClass['Sensitivity']
+
+
+# Report test performance
+cat("Sentiment Accuracy:", round(sentiment_acc, 3), "\n")
+cat("Sentiment Precision:", round(sentiment_prec, 3), "\n")
+cat("Sentiment Recall:", round(sentiment_rec, 3), "\n")
+
+cat("Lie Accuracy:", round(lie_acc, 3), "\n")
+cat("Lie Precision:", round(lie_prec, 3), "\n")
+cat("Lie Recall:", round(lie_rec, 3), "\n")
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

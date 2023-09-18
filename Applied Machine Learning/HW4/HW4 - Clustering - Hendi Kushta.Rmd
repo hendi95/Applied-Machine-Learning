@@ -1,0 +1,115 @@
+## Problem statement
+In the author column, you will find 74 essays with identified authors: 51 essays written by Hamilton, 15 by Madison, 3 by Hamilton and Madison, 5 by Jay. The remaining 11 essays, however, is authored by “Hamilton or Madison”. These are the famous essays with disputed authorship. In this question, you are provided with the Federalist Paper data set. The features are a set of “function words”, for example, “upon”. The feature value is the percentage of the word occurrence in an essay. 
+
+```{r}
+#load packages
+library(tidyverse)  # data manipulation
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering algorithms & visualization
+library(gridExtra)  # sub-figure layout package
+library(dendextend)
+library(gridExtra)
+```
+
+Load data:
+  
+  ```{r}
+library(readr)
+df <- read_csv("~/Desktop/Applied Machine Learning/Week4/HW4-data-fedPapers85(1).csv")
+View(df)
+```
+
+Analyzing current data
+
+```{r}
+#analyze data
+#how many documents are from each author
+table(df$author)
+colnames(df)
+
+```
+
+Search for specific pattern between some of the function words and authros
+
+```{r}
+#boxplot of function words: all; upon; into; categorized by author
+ggplot(data=df)+aes(y=df$all)+geom_boxplot()+facet_wrap(~author) 
+ggplot(data=df)+aes(y=df$upon)+geom_boxplot()+facet_wrap(~author) 
+ggplot(data=df)+aes(y=df$into)+geom_boxplot()+facet_wrap(~author) 
+
+```
+
+Pre-processing: remove labeling and normalize dataset and remove all the authors
+appart from Hamilton and Madison
+
+```{r}
+#remove labeling from data
+df_ul<-df[,3:72]
+
+#normalize: mean and standard deviation
+df_ul <- scale(df_ul)
+df[1:5,1:5]
+df_ul[1:5,1:5]
+
+```
+
+```{r}
+# Check for missing or non-numeric values
+any(is.na(df_ul))
+any(!is.numeric(df_ul))
+
+
+
+```
+```{r}
+#nstart = 25 is a value randomly selected
+model_4 = kmeans(df_ul, centers = 4, nstart = 25)
+#print centroids
+model_4$cluster
+```
+
+
+### Unsupervised Learning with K-means
+# get concat to the initial dataset the results from clustering
+```{r}
+cluster_assignment <- data.frame(df,"clusters"=model_4$cluster)
+```
+
+### Select the best K
+
+```{r}
+
+k2 <- kmeans(df_ul, centers = 2)
+k3 <- kmeans(df_ul, centers = 3)
+k4 <- kmeans(df_ul, centers = 4)
+k5 <- kmeans(df_ul, centers = 5)
+
+
+# plots to compare
+p2 <- fviz_cluster(k2, geom = "point",  data = df_ul) + ggtitle("k = 2")
+p3 <- fviz_cluster(k3, geom = "point",  data = df_ul) + ggtitle("k = 3")
+p4 <- fviz_cluster(k4, geom = "point",  data = df_ul) + ggtitle("k = 4")
+p5 <- fviz_cluster(k5, geom = "point",  data = df_ul) + ggtitle("k = 5")
+
+
+grid.arrange(p2, p3, p4, p5, nrow = 2)
+```
+
+## Visualizing cluster numbers with authors
+
+```{r}
+table(cluster_assignment[,c(1,73)])
+```
+
+```{r}
+# Subset the cluster_assignment matrix for Hamilton and Madison
+ham_mad <- cluster_assignment[cluster_assignment[, 1] %in% c("dispt","Hamilton", "Madison"), ]
+
+# Select the first and 73rd columns
+ham_mad_subset <- ham_mad[, c(1, 73)]
+
+# Generate the table of cluster assignments
+table(ham_mad_subset)
+
+```
+

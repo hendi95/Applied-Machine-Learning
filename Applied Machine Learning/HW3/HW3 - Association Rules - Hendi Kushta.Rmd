@@ -1,0 +1,143 @@
+```{r}
+rm(list = ls())
+
+```
+
+```{r}
+library(arules)
+library(arulesViz)
+```
+
+
+
+```{r}
+library(readr)
+bank_data_1_ <- read_csv("Desktop/Applied Machine Learning/Week3/HW3/bank-data(1).csv")
+View(bank_data_1_)
+str(bank_data_1_)
+```
+
+
+```{r}
+library(tidyverse)
+bank_data_1_ <- bank_data_1_ %>% 
+  select(-id) # remove id column, select all columns except id
+```
+
+
+```{r}
+sum(is.na(bank_data_1_)) # check if there are any null values
+sum(duplicated(bank_data_1_)) # check if there are any duplicated values
+```
+
+
+
+```{r}
+# Convert the relevant columns to factor type with custom levels
+#bank_data_1_$age_cat <- cut(bank_data_1_$age, breaks = c(0, 10, 20, 30, 40, 50, 60, 70),
+#                         labels = c("child", "teens", "twenties", "thirties", "fourties", "fifties", "sixties"))
+
+#bank_data_1_$income_cat <- cut(bank_data_1_$income, breaks = quantile(bank_data_1_$income, probs = seq(0, 1, 0.2)),
+ #                           labels = c("very_low", "low", "medium", "high", "very_high"))
+
+#bank_data_1_$children_cat <- cut(bank_data_1_$children, breaks = c(-Inf, 0, 1, 2, 3), 
+ #                                labels = c("No children", "1 child", "2 children", "3 children"))
+
+
+#bank_data_1_ <- bank_data_1_ %>% 
+ # select(-age, -income, -children)
+
+
+
+bank_transactions = bank_data_1_ |> 
+  # remove the id variable since this is unique to each passenger
+  mutatselect(-id) |> 
+  # convert the numeric variable Age into discrete categories
+  # last week we used the "Base R" function `cut` for this task
+  mutate(age = case_when(
+    age >= 70 ~ 'elderly',
+    age >= 60 ~ 'sixties',
+    age >= 50 ~ 'fifties',
+    age >= 40 ~ 'forties',
+    age >= 30 ~ 'thirties',
+    age >= 20 ~ 'twenties',
+    age >= 10 ~ 'teens',
+    TRUE ~ 'child'
+  )) |> 
+  mutate(children = case_when(
+    children == 0 ~ 'No Children',
+    children == 1 ~ '1 Child',
+    children == 2 ~ '2 Children',
+    children >= 3 ~ '3 or more Children'
+  )) |> 
+  
+  mutate(income = cut(income, breaks = quantile(income, probs = c(0, 0.2, 0.4, 0.6, 0.8, 1)), labels = c("very_low", "low", "medium", "high", "very_high"))) |>
+  
+ # mutate(married = ifelse(married  == 1, 'Yes', 'No')) |> 
+#  mutate(car = ifelse(car == 1, 'Yes', 'No')) |> 
+ # mutate(save_act = ifelse(save_act == 1, 'Yes', 'No')) |> 
+#  mutate(current_act = ifelse(current_act == 1, 'Yes', 'No')) |> 
+ # mutate(mortgage = ifelse(mortgage == 1, 'Yes', 'No')) |> 
+#  mutate(pep = ifelse(pep == 1, 'Yes', 'No')) |>
+  mutate_all(as.factor) # convert everything to a factor
+
+View(bank_transactions)
+
+```
+
+###  Mine rules with the `apriori` algorithm, experiments to obtain strong rules
+
+```{r}
+# It is required to set the minimum support and confidence values
+rules = apriori(bank_transactions,
+                parameter = list(supp = 0.001, conf = 0.8))
+```
+
+### Inspect rules
+```{r}
+# Show the top 5 rules, rounding with 2 digits
+
+options(digits = 2)
+inspect(rules[1:30])
+```
+
+### Summary info for all rules
+```{r}
+summary(rules)
+```
+
+### Sort rules
+```{r}
+# It is required to set the minimum support and confidence values
+rules = apriori(bank_transactions,
+                parameter = list(supp = 0.01, conf = 0.7))
+# Sort rules so that we can view the most relevant rules first
+# For example, sort rules by decreasing "confidence," the conditional probability of the RHS given the LHS
+rules = sort(rules,
+             by = 'confidence', 
+             decreasing = TRUE)
+
+# look at the first 20-30 rules, ranked by confidence
+inspect(rules[1:30])
+```
+### rhs = 'pep=YES'
+
+```{r}
+# If we want to target items to generate rules
+
+rules = apriori(data = bank_transactions,
+                parameter=list(supp = 0.001,
+                               conf = 0.8,
+                               minlen = 2), # 'minlen' is set to avoid empty left hand side items
+               appearance = list(default = 'lhs',
+                                 rhs = 'pep=YES'),
+               control = list(verbose=F))
+
+rules = sort(rules,
+             by = c('confidence','count'),
+             decreasing = TRUE)
+
+inspect(rules[1:30])
+```
+
+

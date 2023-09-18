@@ -1,0 +1,149 @@
+```{r}
+#load packages
+# install.packages('RWeka')
+library(tidyverse)  # data manipulation
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering algorithms & visualization
+library(gridExtra)  # sub-figure layout package
+library(dendextend)
+library(gridExtra)
+library(caret)
+library(RWeka)
+# model interpretations packages
+library(rpart.plot)  # for plotting decision trees
+library(vip)         # for feature importance
+#install.packages("multcomp")
+library(multcomp)
+#install.packages("party")
+library(party)       # for plotting a J48 tree  
+#install.packages("partykit")
+library(partykit)
+```
+
+```{r}
+# Load data:
+
+library(readr)
+df <- read_csv("~/Desktop/Applied Machine Learning/Week4/HW4-data-fedPapers85(1).csv")
+View(df)
+```
+
+```{r}
+# create the data frame for disputed essays
+disputed_essay <- df[1:11,]
+
+# create the data frame where the author name is known
+df <- df[12:72,]
+```
+
+```{r}
+sum(is.na(df))
+sum(is.na(disputed_essay))
+```
+
+```{r}
+# convert author attribute into factor.
+df$author<-as.factor(df$author)
+```
+
+```{r}
+#split
+set.seed(2)
+# training data set
+trainList <- createDataPartition(y=df$author,p=.80,list=FALSE)
+
+# include all elements in training df
+trainData <- df[trainList,-2]
+
+# create testing df with the rest of observations
+testData <- df[-trainList,-2]
+
+
+NN <- make_Weka_filter("weka/filters/unsupervised/attribute/NumericToNominal")
+nominal_train <- NN(data=trainData, control= Weka_control(R="1-3"), na.action = NULL)
+nominal_test <- NN(data=testData, control= Weka_control(R="1,3"), na.action = NULL)
+#head(nominal_train)
+#head(nominal_test)
+#str(nominal_train)
+```
+
+```{r}
+## build up a default C4.5 model
+
+# Build the J48 decision tree model
+model <- J48(author ~ ., data = nominal_train)
+
+# Plot the decision tree without the x-axis labels
+plot(model, uniform=TRUE, gp = gpar(fontsize = 6))
+
+## use cross-validation tech to evaluate the model
+e <- evaluate_Weka_classifier(model, numFolds = 10, seed = 9, class = TRUE)
+
+## show the performance
+print(paste("model accuracy is: ", e$details['pctCorrect']))
+```
+
+```{r}
+## predict the results for disputed essays
+pred=predict (model, newdata = disputed_essay, type = c("class"))
+pred
+```
+
+```{r}
+filename=disputed_essay[c("filename")]
+## combine id and predicted label into a new data frame
+newpred=cbind(filename, pred)
+colnames(newpred)=c("filename", "author")
+newpred
+```
+
+```{r}
+#WOW("J48")
+## potential values for confidence factor C and number of instances M
+Conf_values <- seq(0.01, 0.5, by = 0.01)
+Num_instances_values <- 2:10
+
+## initialize variables to record the best model
+best_performance = 0.0
+best_confidence <- 0.0
+best_num_instances <- 0.0
+
+for (i in 1:length(Conf_values)) {
+  for (j in 1:length(Num_instances_values)) {
+    c_value = Conf_values[i]
+    m_value = Num_instances_values[j]
+    m <- J48(author~., data = trainData,
+        control = Weka_control(U=FALSE, C = c_value, M=m_value))
+    e <- evaluate_Weka_classifier(m, numFolds = 10, complexity = TRUE, seed = 9, class = TRUE)
+    if (e$details['pctCorrect'] > best_performance) {
+      best_performance <- e$details['pctCorrect']
+      best_c <- c_value
+      best_m <- m_value
+    }
+  }
+}
+
+```
+
+```{r}
+print(paste("best model accuracy is: ", best_performance))
+print(paste("best number instance value is: ", best_m))
+print(paste("best confidence factor is: ", best_c))
+```
+
+```{r}
+model <- J48(author~., data = nominal_train, control=Weka_control(U=FALSE, M=best_m, C=best_c))
+plot(model, uniform=TRUE, gp = gpar(fontsize = 6))
+## predict the results for disputed essays
+pred=predict (model, newdata = disputed_essay, type = c("class"))
+pred
+```
+
+```{r}
+filename=disputed_essay[c("filename")]
+## combine id and predicted label into a new data frame
+
+newpred=cbind(filename, pred)
+colnames(newpred)=c("filename", "author")
+newpred
+```
